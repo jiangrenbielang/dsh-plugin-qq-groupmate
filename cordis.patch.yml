@@ -1,0 +1,44 @@
+# dsh-plugin-qq-groupmate 的组合包（bundle）补丁。
+#
+# dsh 按 dsh.profile.bundles 的顺序逐层套用每个组合包的补丁；这一层只插一行插件，
+# 默认配置是「反向 WS」——QQ 协议端（NapCat / SnowLuma / LLOneBot / Lagrange 等）
+# 主动连到下面的 listenPort 上。
+#
+# 想改默认值：改这个文件（升级时会被覆盖），或改自己 profile 里的 cordis.patch.yml
+# （用户层最后套用，按 id 覆盖整行 config，更稳）。设置页「插件配置」里改的也是用户层。
+
+- insert:
+    - id: qq-groupmate
+      name: 'dsh-plugin-qq-groupmate'
+      config:
+        # reverse = 插件监听端口等协议端连进来；forward = 插件主动连协议端的 WS 地址。
+        mode: reverse
+        listenHost: 127.0.0.1
+        listenPort: 3001
+        # accessToken: ''                 # 与协议端填的一致；留空表示不校验
+        defaultCharacter: default
+        provider: deepseek-official
+        model: deepseek-v4-flash
+        commandPrefix: '.'
+        admins: []                        # 允许执行管理命令的 QQ 号；留空表示所有人
+        trigger:
+          mention: true                   # 被 @ 时回复
+          prefixes: []                    # 消息以这些词开头时回复，例如 ['/ai', '小可']
+          randomChance: 0                 # 没被点名时随机接话的概率 0~1
+          cooldownSeconds: 5
+          replyToSelf: true               # 回复机器人自己的消息时接话
+          privateChat: true               # 响应私聊
+        context:
+          maxTurns: 30
+          maxChars: 6000
+        # groups:                           # 按群覆盖角色与模型
+        #   '123456789':
+        #     character: default
+        #     model: deepseek-v4-pro
+#
+# 正向 WS 写法：
+#     - id: qq-groupmate
+#       name: 'dsh-plugin-qq-groupmate'
+#       config:
+#         mode: forward
+#         wsUrl: ws://127.0.0.1:3001
