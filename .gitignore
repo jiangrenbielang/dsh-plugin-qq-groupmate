@@ -3,3 +3,7 @@ node_modules/
 _preview/
 .DS_Store
 Thumbs.db
+
+native-voice/
+memory/
+state.json

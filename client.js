@@ -1143,7 +1143,6 @@ window.__ModuleLoader__.load({
 
 				section("模型分配", [
 					slotRow("群聊", "chat", "群聊用的模型；备用模型在它请求失败（401、超时、网络错误…）时自动顶上"),
-					slotRow("总结记忆", "summary", "留空跟随群聊模型；建议用便宜的快模型"),
 					slotRow("持续学习", "learner", "留空跟随群聊模型；建议用便宜的快模型"),
 					slotRow("识图", "vision", "留空跟随群聊模型；要选能读图的模型"),
 					live.modelFallback
@@ -1180,7 +1179,7 @@ window.__ModuleLoader__.load({
 
 				]),
 
-				fold("fun", "群友玩法（过滤 / 联网 / 档案 / 提醒 / 天气 / 语音 / 老婆 / 塔罗 / 表情）", [
+				fold("fun", "群友玩法（过滤 / 联网 / 提醒 / 天气 / 语音 / 老婆 / 塔罗 / 表情）", [
 				section("发送过滤（违禁词）", [
 					field("启用", ["outboundFilter", "enabled"], h(SwitchField, {
 						value: (value.outboundFilter || {}).enabled !== false, disabled: disabled,
@@ -1342,6 +1341,28 @@ window.__ModuleLoader__.load({
 						},
 					}), "api_v2 格式的本地 TTS 接口"),
 
+					field("日文 TTS 端点", ["voice", "japaneseEndpoint"], h(TextField, {
+						value: (value.voice || {}).japaneseEndpoint, disabled: disabled, placeholder: "http://127.0.0.1:9881/tts",
+						onCommit: (next) => {
+							if (next.trim() === "") reset(["voice", "japaneseEndpoint"])();
+							else set(["voice", "japaneseEndpoint"])(next.trim());
+						},
+					}), "日文音色单独一套服务（与 mod 的 JapaneseVoiceEndpoint 一致，默认 9881）"),
+
+					field("语音语言", ["voice", "language"], h(SelectField, {
+						value: (value.voice || {}).language === undefined ? "auto" : (value.voice || {}).language,
+						disabled: disabled,
+						options: [
+							{ value: "auto", label: "自动（按回复语言）" },
+							{ value: "zh", label: "中文音色" },
+							{ value: "ja", label: "日文音色" },
+						],
+						onCommit: (next) => {
+							if (next === undefined || next === "auto") reset(["voice", "language"])();
+							else set(["voice", "language"])(next);
+						},
+					}), "自动：回复里出现假名就走日文音色。两套音色的端点、参考音与 api_v2 配置各自独立，互不影响"),
+
 					field("语音宿主路径", ["voice", "hostPath"], h(TextField, {
 						value: (value.voice || {}).hostPath, disabled: disabled, placeholder: "留空自动探测",
 						onCommit: (next) => {
@@ -1362,7 +1383,15 @@ window.__ModuleLoader__.load({
 							if (next.trim() === "") reset(["voice", "refsDir"])();
 							else set(["voice", "refsDir"])(next.trim());
 						},
-					}), "放 calm/excited/wronged/sleepy-reference.wav（情绪参考音）"),
+					}), "中文音色：放 calm/excited/wronged/sleepy-reference.wav（情绪参考音）；留空会自动探测语音运行时隔壁的 voice 目录"),
+
+					field("日文参考音目录", ["voice", "japaneseRefsDir"], h(TextField, {
+						value: (value.voice || {}).japaneseRefsDir, disabled: disabled, placeholder: "留空自动探测（voice/jp）",
+						onCommit: (next) => {
+							if (next.trim() === "") reset(["voice", "japaneseRefsDir"])();
+							else set(["voice", "japaneseRefsDir"])(next.trim());
+						},
+					}), "日文音色：calm / excited / wronged / sleepy-reference.wav，另有 calm-aux-reference.wav（与 mod 一致）"),
 
 					field("语音概率", ["voice", "probability"], h(NumberField, {
 						value: (value.voice || {}).probability, disabled: disabled,
@@ -1471,94 +1500,6 @@ window.__ModuleLoader__.load({
 					}), "md5 确定性抽牌，问一百遍也是它；关掉就每次都重新随机"),
 				]),
 
-				section("群友档案（跨群记忆）", [
-					field("启用", ["people", "enabled"], h(SwitchField, {
-						value: (value.people || {}).enabled !== false, disabled: disabled, label: "记住群里的人",
-						onCommit: set(["people", "enabled"]),
-					}), "按 QQ 号记长期印象与约定；跨群共享，同一个人换群不用重新认识"),
-
-					field("跨群共享", ["people", "crossGroupEnabled"], h(SwitchField, {
-						value: (value.people || {}).crossGroupEnabled !== false, disabled: disabled, label: "别的群学到的也能用",
-						onCommit: set(["people", "crossGroupEnabled"]),
-					}), "关掉就退化成「只在同一个会话里记住」"),
-
-					field("私聊→群", ["people", "privateToGroup"], h(SwitchField, {
-						value: (value.people || {}).privateToGroup !== false, disabled: disabled, label: "私聊交代的事群里能接上",
-						onCommit: set(["people", "privateToGroup"]),
-					}), "关掉后私聊里说的不会在群里被提起（更保守）"),
-
-					field("不共享的会话", ["people", "crossGroupExclude"], h(TextAreaField, {
-						value: Array.isArray((value.people || {}).crossGroupExclude) ? (value.people || {}).crossGroupExclude.join("\n") : "",
-						disabled: disabled, placeholder: "每行一个：群号 或 private:QQ", rows: 2,
-						onCommit: (next) => {
-							const list = next.split(/[\n,，]/).map(item => item.trim()).filter(item => item !== "");
-							if (list.length === 0) reset(["people", "crossGroupExclude"])();
-							else set(["people", "crossGroupExclude"])(list);
-						},
-					}), "这些会话里的记忆不参与跨群共享（比如别把某个群的私事带到别的群）"),
-
-					field("最多注入几个人", ["people", "peopleMaxInject"], h(NumberField, {
-						value: (value.people || {}).peopleMaxInject, disabled: disabled,
-						onCommit: set(["people", "peopleMaxInject"]),
-					}), "每次回复最多把几个人的跨群档案写进提示词（默认 6）"),
-
-					field("最多注入几条事件", ["people", "eventsMaxInject"], h(NumberField, {
-						value: (value.people || {}).eventsMaxInject, disabled: disabled,
-						onCommit: set(["people", "eventsMaxInject"]),
-					}), "长期记忆（约定 / 梗 / 恩怨）每次最多注入几条（默认 6）"),
-
-					field("每人的印象条数", ["people", "factsPerPersonInject"], h(NumberField, {
-						value: (value.people || {}).factsPerPersonInject, disabled: disabled,
-						onCommit: set(["people", "factsPerPersonInject"]),
-					}), "跨群档案里每个人最多列几条印象（默认 3）"),
-
-					field("提示词预算（字）", ["people", "maxChars"], h(NumberField, {
-						value: (value.people || {}).maxChars, disabled: disabled,
-						onCommit: set(["people", "maxChars"]),
-					}), "「跨群档案 + 长期记忆」两节的总字数上限（默认 1400）"),
-
-					field("遗忘半衰期（天）", ["people", "decayHalfLifeDays"], h(NumberField, {
-						value: (value.people || {}).decayHalfLifeDays, disabled: disabled,
-						onCommit: set(["people", "decayHalfLifeDays"]),
-					}), "基准半衰期（默认 30 天）。重要度越高实际半衰期越长：重要度 1→1×，5→4×"),
-
-					field("淘汰阈值", ["people", "decayMinWeight"], h(NumberField, {
-						value: (value.people || {}).decayMinWeight, disabled: disabled,
-						onCommit: set(["people", "decayMinWeight"]),
-					}), "权重衰减到这个值以下就清理（默认 0.08，越小记得越久）"),
-
-					field("至少保留（天）", ["people", "decayMinAgeDays"], h(NumberField, {
-						value: (value.people || {}).decayMinAgeDays, disabled: disabled,
-						onCommit: set(["people", "decayMinAgeDays"]),
-					}), "多久没碰过的记忆才允许被清理（默认 7 天）"),
-
-					field("永久保留重要度", ["people", "keepImportance"], h(NumberField, {
-						value: (value.people || {}).keepImportance, disabled: disabled,
-						onCommit: set(["people", "keepImportance"]),
-					}), "重要度到这个值（1~5）以上就永不遗忘（默认 4）"),
-
-					field("每人印象上限", ["people", "maxFactsPerPerson"], h(NumberField, {
-						value: (value.people || {}).maxFactsPerPerson, disabled: disabled,
-						onCommit: set(["people", "maxFactsPerPerson"]),
-					}), "一个人最多存几条印象，超了按重要度淘汰（默认 12）"),
-
-					field("表层记忆", ["people", "surfaceEnabled"], h(SwitchField, {
-						value: (value.people || {}).surfaceEnabled !== false, disabled: disabled, label: "记得「刚在别处说过的话」",
-						onCommit: set(["people", "surfaceEnabled"]),
-					}), "某人 10 分钟内在别群 / 私聊说的话，在别的会话里能自然接上"),
-
-					field("表层记忆寿命（分钟）", ["people", "surfaceTtlMinutes"], h(NumberField, {
-						value: (value.people || {}).surfaceTtlMinutes, disabled: disabled,
-						onCommit: set(["people", "surfaceTtlMinutes"]),
-					}), "默认 10 分钟；越短越不容易「跨会话串台」"),
-
-					field("整理间隔（小时）", ["people", "decayIntervalHours"], h(NumberField, {
-						value: (value.people || {}).decayIntervalHours, disabled: disabled,
-						onCommit: set(["people", "decayIntervalHours"]),
-					}), "多久跑一次遗忘清理（默认 24，0 = 不自动跑）"),
-
-					note("people-note", "记忆存在数据目录的 people/ 里（people.json / events.json / surface.json）。"),
-				]),
 
 				section("定时提醒", [
 					field("启用", ["reminders", "enabled"], h(SwitchField, {
@@ -1840,7 +1781,7 @@ window.__ModuleLoader__.load({
 
 				]),
 
-				fold("talk", "触发、记忆与知识库", [
+				fold("talk", "触发与知识库", [
 				section("知识库", [
 					field("启用", ["knowledge", "enabled"], h(SwitchField, {
 						value: (value.knowledge || {}).enabled === true, disabled: disabled, label: "启用知识库",
@@ -1888,105 +1829,178 @@ window.__ModuleLoader__.load({
 					}), null),
 				]),
 
-				section("上下文", [
-					field("保留条数", ["context", "maxTurns"], h(NumberField, {
-						value: context.maxTurns, disabled: disabled,
-						onCommit: set(["context", "maxTurns"]),
-					}), "每个群带多少条最近消息给模型"),
-
-					field("字数上限", ["context", "maxChars"], h(NumberField, {
-						value: context.maxChars, disabled: disabled,
-						onCommit: set(["context", "maxChars"]),
-					}), "上下文总字数上限，超了从最早的丢"),
 				]),
 
-				section("总结记忆", [
-					field("启用", ["memory", "enabled"], h(SwitchField, {
-						value: memory.enabled !== false, disabled: disabled, label: "启用总结记忆",
-						onCommit: set(["memory", "enabled"]),
-					}), "把早期对话压缩成长期记忆，替代原文进上下文（参考 RP-Hub 总结模式）"),
+				fold("memory", "记忆（记话 / 记人 / 学腔调）", [
+					section("常用", [
+						note("memory-intro", "机器人会自动记住群里的事：旧聊天按小时归档、认识每个人、学着像你们一样说话。三个开关全开就是推荐配置。"),
 
-					note("memorymodelhint", "总结用哪个模型在「模型分配 → 总结记忆」里选。"),
-					field("每批条数", ["memory", "batchMessages"], h(NumberField, {
-						value: memory.batchMessages, disabled: disabled,
-						onCommit: set(["memory", "batchMessages"]),
-					}), "攒够多少条消息总结一次"),
+						field("旧事归档", ["memory", "enabled"], h(SwitchField, {
+							value: memory.enabled !== false, disabled: disabled, label: "把聊天按小时存档",
+							onCommit: set(["memory", "enabled"]),
+						}), "存下来的旧聊天**不会每轮塞给模型**（那样又贵又容易让它答非所问）：平时不占额度，等聊到以前的事、模型自己翻（`[回忆:关键词]`）才取出来"),
 
-					field("保留原文", ["memory", "keepMessages"], h(NumberField, {
-						value: memory.keepMessages, disabled: disabled,
-						onCommit: set(["memory", "keepMessages"]),
-					}), "最近多少条保持原文、不总结；0 = 跟随「上下文 → 保留条数」（推荐，只压缩反正会掉出上下文的部分）"),
+						field("群友档案", ["people", "enabled"], h(SwitchField, {
+							value: (value.people || {}).enabled !== false, disabled: disabled, label: "记住群里的人",
+							onCommit: set(["people", "enabled"]),
+						}), "按 QQ 号记住每个人的印象和约定，换群也不用重新认识"),
 
-					field("合并条数", ["memory", "mergeCount"], h(NumberField, {
-						value: memory.mergeCount, disabled: disabled,
-						onCommit: set(["memory", "mergeCount"]),
-					}), "每多少条批次总结再合并成一条长期记忆"),
+						field("说话习惯", ["learner", "enabled"], h(SwitchField, {
+							value: learner.enabled === true, disabled: disabled, label: "学群友的说话腔调",
+							onCommit: set(["learner", "enabled"]),
+						}), "只学「怎么说」（句子长短、口头禅），不学「说什么」，也不改人设"),
 
-					field("思考强度", ["memory", "reasoningEffort"], h(TextField, {
-						value: memory.reasoningEffort, disabled: disabled, placeholder: "off / low / high / max，留空用模型默认",
-						onCommit: (next) => {
-							if (next.trim() === "") reset(["memory", "reasoningEffort"])();
-							else set(["memory", "reasoningEffort"])(next.trim());
-						},
-					}), "总结是压缩任务，默认 off 关掉思考；模型不支持时自动退回默认"),
+						field("每次带多少条聊天记录", ["context", "maxTurns"], h(NumberField, {
+							value: context.maxTurns, disabled: disabled,
+							onCommit: set(["context", "maxTurns"]),
+						}), "数字越大越记得住，也越费额度；30 条对大多数群够用"),
 
-					field("最大 token", ["memory", "maxTokens"], h(NumberField, {
-						value: memory.maxTokens, disabled: disabled,
-						onCommit: set(["memory", "maxTokens"]),
-					}), "思考也占这个额度：思考强度开 high/max 时建议 4000 以上，否则正文容易被思考挤空（默认 2000）"),
-				]),
+						note("memorymodelhint", "说话习惯用哪个模型，在「模型分配」里选。"),
+					]),
 
-				section("持续学习", [
-					field("启用", ["learner", "enabled"], h(SwitchField, {
-						value: learner.enabled === true, disabled: disabled, label: "启用持续学习",
-						onCommit: set(["learner", "enabled"]),
-					}), "从群友（不含机器人自己）的发言里提炼说话腔调，让回复更像人；只学怎么说、不学说什么，不改变人设"),
+					fold("memory-detail", "细调（不确定就保持默认）", [
+						section("旧事归档怎么存", [
+							field("保留多久（天）", ["memory", "retainDays"], h(NumberField, {
+								value: memory.retainDays, disabled: disabled,
+								onCommit: set(["memory", "retainDays"]),
+							}), "超过这个天数的归档自动清掉（默认 120）。归档放在数据目录的 memory/chunks 下，按会话、按小时一个文件"),
+						]),
 
-					note("learnermodelhint", "提炼用哪个模型在「模型分配 → 持续学习」里选。"),
-					field("每批条数", ["learner", "batchMessages"], h(NumberField, {
-						value: learner.batchMessages, disabled: disabled,
-						onCommit: set(["learner", "batchMessages"]),
-					}), "攒够多少条群友消息提炼一次"),
+						section("说话习惯怎么学", [
+							field("多久学一次", ["learner", "batchMessages"], h(NumberField, {
+								value: learner.batchMessages, disabled: disabled,
+								onCommit: set(["learner", "batchMessages"]),
+							}), "攒够这么多条群友消息提炼一次（默认 60）"),
 
-					field("保留原文", ["learner", "keepMessages"], h(NumberField, {
-						value: learner.keepMessages, disabled: disabled,
-						onCommit: set(["learner", "keepMessages"]),
-					}), "最近多少条消息不用于学习"),
+							field("跳过最近几条", ["learner", "keepMessages"], h(NumberField, {
+								value: learner.keepMessages, disabled: disabled,
+								onCommit: set(["learner", "keepMessages"]),
+							}), "最近这么多条不拿去学（默认 40）"),
 
-					field("画像上限", ["learner", "maxChars"], h(NumberField, {
-						value: learner.maxChars, disabled: disabled,
-						onCommit: set(["learner", "maxChars"]),
-					}), "风格画像最多保留多少字"),
+							field("画像字数上限", ["learner", "maxChars"], h(NumberField, {
+								value: learner.maxChars, disabled: disabled,
+								onCommit: set(["learner", "maxChars"]),
+							}), "学到的风格画像最多保留多少字（默认 400）"),
 
-					field("禁用词", ["learner", "bannedWords"], h(ListField, {
-						value: learner.bannedWords || [], disabled: disabled, placeholder: "奶龙、酒馆",
-						onCommit: set(["learner", "bannedWords"]),
-					}), "画像里出现这些词就整条丢弃，防止把禁词带进提示词"),
+							field("禁用词", ["learner", "bannedWords"], h(ListField, {
+								value: learner.bannedWords || [], disabled: disabled, placeholder: "奶龙、酒馆",
+								onCommit: set(["learner", "bannedWords"]),
+							}), "画像里出现这些词就整条丢掉，免得把它们带进提示词"),
 
-					field("跳过群", ["learner", "skipGroups"], h(ListField, {
-						value: learner.skipGroups || [], disabled: disabled, placeholder: "群号，逗号分隔",
-						onCommit: set(["learner", "skipGroups"]),
-					}), "这些群完全不参与学习——群里基本都是机器人时用"),
+							field("不学的群", ["learner", "skipGroups"], h(ListField, {
+								value: learner.skipGroups || [], disabled: disabled, placeholder: "群号，逗号分隔",
+								onCommit: set(["learner", "skipGroups"]),
+							}), "这些群完全不参与学习——群里基本都是机器人时用"),
 
-					field("跳过发言人", ["learner", "skipSpeakers"], h(ListField, {
-						value: learner.skipSpeakers || [], disabled: disabled, placeholder: "小爱、群猫娘、管家",
-						onCommit: set(["learner", "skipSpeakers"]),
-					}), "昵称包含这些词的发言人不参与学习（子串匹配），其他群混 bot 时用"),
+							field("不学的人", ["learner", "skipSpeakers"], h(ListField, {
+								value: learner.skipSpeakers || [], disabled: disabled, placeholder: "小爱、群猫娘、管家",
+								onCommit: set(["learner", "skipSpeakers"]),
+							}), "昵称里带这些词的发言人不参与学习（包含即算），别的群混了 bot 时用"),
 
-					field("思考强度", ["learner", "reasoningEffort"], h(TextField, {
-						value: learner.reasoningEffort, disabled: disabled, placeholder: "off / low / high / max，留空用模型默认",
-						onCommit: (next) => {
-							if (next.trim() === "") reset(["learner", "reasoningEffort"])();
-							else set(["learner", "reasoningEffort"])(next.trim());
-						},
-					}), "提炼是压缩任务，默认 off 关掉思考；模型不支持时自动退回默认"),
+							field("思考强度", ["learner", "reasoningEffort"], h(TextField, {
+								value: learner.reasoningEffort, disabled: disabled, placeholder: "off / low / high / max，留空用模型默认",
+								onCommit: (next) => {
+									if (next.trim() === "") reset(["learner", "reasoningEffort"])();
+									else set(["learner", "reasoningEffort"])(next.trim());
+								},
+							}), "同样是改写任务，默认 off；模型不支持时自动退回默认"),
 
-					field("最大 token", ["learner", "maxTokens"], h(NumberField, {
-						value: learner.maxTokens, disabled: disabled,
-						onCommit: set(["learner", "maxTokens"]),
-					}), "思考也占这个额度：思考强度开 high/max 时建议 4000 以上（默认 2000）"),
-				]),
+							field("最大 token", ["learner", "maxTokens"], h(NumberField, {
+								value: learner.maxTokens, disabled: disabled,
+								onCommit: set(["learner", "maxTokens"]),
+							}), "思考也占这个额度：思考强度开 high/max 时建议 4000 以上（默认 2000）"),
+						]),
+						section("群友档案：记什么 / 忘多快", [
+							field("跨群共享", ["people", "crossGroupEnabled"], h(SwitchField, {
+								value: (value.people || {}).crossGroupEnabled !== false, disabled: disabled, label: "别的群学到的也能用",
+								onCommit: set(["people", "crossGroupEnabled"]),
+							}), "关掉就退化成「只在同一个会话里记住」"),
 
+							field("私聊→群", ["people", "privateToGroup"], h(SwitchField, {
+								value: (value.people || {}).privateToGroup !== false, disabled: disabled, label: "私聊交代的事群里能接上",
+								onCommit: set(["people", "privateToGroup"]),
+							}), "关掉后私聊里说的不会在群里被提起（更保守）"),
+
+							field("不共享的会话", ["people", "crossGroupExclude"], h(TextAreaField, {
+								value: Array.isArray((value.people || {}).crossGroupExclude) ? (value.people || {}).crossGroupExclude.join("\n") : "",
+								disabled: disabled, placeholder: "每行一个：群号 或 private:QQ", rows: 2,
+								onCommit: (next) => {
+									const list = next.split(/[\n,，]/).map(item => item.trim()).filter(item => item !== "");
+									if (list.length === 0) reset(["people", "crossGroupExclude"])();
+									else set(["people", "crossGroupExclude"])(list);
+								},
+							}), "这些会话的记忆不参与跨群共享（别把某个群的私事带到别的群）"),
+
+							field("最多带几个人", ["people", "peopleMaxInject"], h(NumberField, {
+								value: (value.people || {}).peopleMaxInject, disabled: disabled,
+								onCommit: set(["people", "peopleMaxInject"]),
+							}), "每次回复最多把几个人的档案写进提示词（默认 6）"),
+
+							field("最多带几条事件", ["people", "eventsMaxInject"], h(NumberField, {
+								value: (value.people || {}).eventsMaxInject, disabled: disabled,
+								onCommit: set(["people", "eventsMaxInject"]),
+							}), "约定 / 梗 / 恩怨这类长期记忆每次最多带几条（默认 6）"),
+
+							field("每人几条印象", ["people", "factsPerPersonInject"], h(NumberField, {
+								value: (value.people || {}).factsPerPersonInject, disabled: disabled,
+								onCommit: set(["people", "factsPerPersonInject"]),
+							}), "档案里每个人最多列几条印象（默认 3）"),
+
+							field("提示词预算（字）", ["people", "maxChars"], h(NumberField, {
+								value: (value.people || {}).maxChars, disabled: disabled,
+								onCommit: set(["people", "maxChars"]),
+							}), "「档案 + 长期记忆」两节合起来最多多少字（默认 1400）"),
+
+							field("遗忘速度（天）", ["people", "decayHalfLifeDays"], h(NumberField, {
+								value: (value.people || {}).decayHalfLifeDays, disabled: disabled,
+								onCommit: set(["people", "decayHalfLifeDays"]),
+							}), "多久忘掉一半（默认 30 天）；越重要的记得越久，重要度 5 大约能记 4 倍时间"),
+
+							field("淘汰阈值", ["people", "decayMinWeight"], h(NumberField, {
+								value: (value.people || {}).decayMinWeight, disabled: disabled,
+								onCommit: set(["people", "decayMinWeight"]),
+							}), "衰减到这个程度就清理（默认 0.08，越小记得越久）"),
+
+							field("至少保留（天）", ["people", "decayMinAgeDays"], h(NumberField, {
+								value: (value.people || {}).decayMinAgeDays, disabled: disabled,
+								onCommit: set(["people", "decayMinAgeDays"]),
+							}), "多久没碰过的记忆才允许被清理（默认 7 天）"),
+
+							field("永不遗忘的重要度", ["people", "keepImportance"], h(NumberField, {
+								value: (value.people || {}).keepImportance, disabled: disabled,
+								onCommit: set(["people", "keepImportance"]),
+							}), "重要度到这个数（1~5）以上就永不遗忘（默认 4）"),
+
+							field("每人印象上限", ["people", "maxFactsPerPerson"], h(NumberField, {
+								value: (value.people || {}).maxFactsPerPerson, disabled: disabled,
+								onCommit: set(["people", "maxFactsPerPerson"]),
+							}), "一个人最多存几条印象，超了先淘汰不重要的（默认 12）"),
+
+							field("跨会话接话", ["people", "surfaceEnabled"], h(SwitchField, {
+								value: (value.people || {}).surfaceEnabled !== false, disabled: disabled, label: "记得「刚在别处说过的话」",
+								onCommit: set(["people", "surfaceEnabled"]),
+							}), "某人刚在别的群 / 私聊说过的话，这里也能自然接上"),
+
+							field("接话有效期（分钟）", ["people", "surfaceTtlMinutes"], h(NumberField, {
+								value: (value.people || {}).surfaceTtlMinutes, disabled: disabled,
+								onCommit: set(["people", "surfaceTtlMinutes"]),
+							}), "默认 10 分钟；调小更不容易「跨会话串台」"),
+
+							field("整理间隔（小时）", ["people", "decayIntervalHours"], h(NumberField, {
+								value: (value.people || {}).decayIntervalHours, disabled: disabled,
+								onCommit: set(["people", "decayIntervalHours"]),
+							}), "多久自动清理一次忘掉的记忆（默认 24，0 = 不自动跑）"),
+
+							note("people-note", "记忆文件在数据目录的 people/ 里；想全部忘掉，删掉这个文件夹再重启即可。"),
+						]),
+
+						section("上下文总字数", [
+							field("字数上限", ["context", "maxChars"], h(NumberField, {
+								value: context.maxChars, disabled: disabled,
+								onCommit: set(["context", "maxChars"]),
+							}), "聊天记录 + 记忆 + 资料合起来的上限，超了从最早的丢；默认 6000，开满记忆可调到 20000 左右"),
+						]),
+					]),
 				]),
 
 				fold("advanced", "高级（命令 / 路径 / 按群覆盖）", [
