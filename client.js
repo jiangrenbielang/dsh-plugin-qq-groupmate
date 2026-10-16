@@ -2053,11 +2053,18 @@ window.__ModuleLoader__.load({
 
 		/** 浏览器半入口。 */
 		function apply(ctx) {
-			const scope = ctx.settingsScope.bind({
+			// settingsScope 是可选服务：dsh 0.2.x 客户端可能尚未提供它。
+			// 注意：不能直接读 ctx.settingsScope（未在 inject 声明会抛异常），
+			// 必须用 ctx.get("settingsScope") 做可选探测。
+			const settingsScope = ctx.get("settingsScope");
+			if (settingsScope === void 0) {
+				return;
+			}
+			const scope = settingsScope.bind({
 				namespace: NS,
 				decode: (section) => (section !== null && typeof section === "object" && !Array.isArray(section) ? section : undefined),
 			});
-			const statusScope = ctx.settingsScope.bind({
+			const statusScope = settingsScope.bind({
 				namespace: STATUS_NS,
 				decode: (section) => (section !== null && typeof section === "object" && !Array.isArray(section) ? section : undefined),
 			});
@@ -2069,7 +2076,7 @@ window.__ModuleLoader__.load({
 		}
 
 		exports.apply = apply;
-		exports.inject = ["slots", "settingsScope"];
+		exports.inject = ["slots"];
 		return module.exports;
 	}
 });
